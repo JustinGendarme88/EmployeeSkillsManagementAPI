@@ -4,7 +4,9 @@ obj/
 
 *.user
 *.suo
+*.db
 
 app.db
 app.db-shm
 app.db-wal
+
