@@ -5,6 +5,9 @@ obj/
 *.user
 *.suo
 *.db
+*.db
+*.db-shm
+*.db-wal
 
 app.db
 app.db-shm
