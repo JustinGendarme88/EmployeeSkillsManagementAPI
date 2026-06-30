@@ -23,6 +23,7 @@ public class DepartmentsController : ControllerBase
         return await _context.Departments.ToListAsync();
     }
 
+
     [HttpPost]
     public async Task<ActionResult<Department>> CreateDepartment(CreateDepartmentDto dto)
     {
@@ -36,7 +37,7 @@ public class DepartmentsController : ControllerBase
         await _context.SaveChangesAsync();
 
         return CreatedAtAction(
-            nameof(GetDepartments),
+            nameof(GetDepartment),
             new { id = department.Id },
             department);
     }
@@ -52,5 +53,39 @@ public class DepartmentsController : ControllerBase
         }
 
         return department;
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateDepartment(int id, UpdateDepartmentDto dto)
+    {
+        var department = await _context.Departments.FindAsync(id);
+
+        if (department == null)
+        {
+            return NotFound();
+        }
+
+        department.Name = dto.Name;
+
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteDepartment(int id)
+    {
+        var department = await _context.Departments.FindAsync(id);
+
+        if (department == null)
+        {
+            return NotFound();
+        }
+
+        _context.Departments.Remove(department);
+
+        await _context.SaveChangesAsync();
+
+        return NoContent();
     }
 }
