@@ -14,4 +14,26 @@ public class ApplicationDbContext : DbContext
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Skill> Skills => Set<Skill>();
     public DbSet<EmployeeSkill> EmployeeSkills => Set<EmployeeSkill>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<EmployeeSkill>()
+            .HasKey(employeeSkill => new
+            {
+                employeeSkill.EmployeeId,
+                employeeSkill.SkillId
+            });
+
+        modelBuilder.Entity<EmployeeSkill>()
+            .HasOne(employeeSkill => employeeSkill.Employee)
+            .WithMany(employee => employee.EmployeeSkills)
+            .HasForeignKey(employeeSkill => employeeSkill.EmployeeId);
+
+        modelBuilder.Entity<EmployeeSkill>()
+            .HasOne(employeeSkill => employeeSkill.Skill)
+            .WithMany(skill => skill.EmployeeSkills)
+            .HasForeignKey(employeeSkill => employeeSkill.SkillId);
+    }
 }
