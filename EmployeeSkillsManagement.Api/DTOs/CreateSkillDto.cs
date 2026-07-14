@@ -1,11 +1,16 @@
-﻿namespace EmployeeSkillsManagement.Api.DTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace EmployeeSkillsManagement.Api.DTOs;
+
+public class CreateSkillDto
 {
-    public class CreateSkillDto
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public string Category { get; set; } = string.Empty;
+    [Required(ErrorMessage = "Skill name is required.")]
+    [StringLength(100, MinimumLength = 2,
+        ErrorMessage = "Skill name must contain between 2 and 100 characters.")]
+    public string Name { get; set; } = string.Empty;
 
-
-    }
+    [Required(ErrorMessage = "Skill category is required.")]
+    [StringLength(100, MinimumLength = 2,
+        ErrorMessage = "Skill category must contain between 2 and 100 characters.")]
+    public string Category { get; set; } = string.Empty;
 }
