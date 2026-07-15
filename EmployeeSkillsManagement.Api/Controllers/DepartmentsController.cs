@@ -1,8 +1,8 @@
 ﻿using EmployeeSkillsManagement.Api.Data;
+using EmployeeSkillsManagement.Api.DTOs;
 using EmployeeSkillsManagement.Api.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using EmployeeSkillsManagement.Api.DTOs;
 
 namespace EmployeeSkillsManagement.Api.Controllers;
 
@@ -17,23 +17,56 @@ public class DepartmentsController : ControllerBase
         _context = context;
     }
 
+    // GET: api/departments
     [HttpGet]
     public async Task<ActionResult<List<Department>>> GetDepartments()
     {
-        return await _context.Departments.ToListAsync();
+        var departments = await _context.Departments
+            .AsNoTracking()
+            .ToListAsync();
+
+        return Ok(departments);
     }
 
-
-    [HttpPost]
-    public async Task<ActionResult<Department>> CreateDepartment(CreateDepartmentDto dto)
+    // GET: api/departments/1
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<Department>> GetDepartment(int id)
     {
+        var department = await _context.Departments
+            .AsNoTracking()
+            .FirstOrDefaultAsync(department => department.Id == id);
+
+        if (department is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(department);
+    }
+
+    // POST: api/departments
+    [HttpPost]
+    public async Task<ActionResult<Department>> CreateDepartment(
+        CreateDepartmentDto dto)
+    {
+        var normalizedName = dto.Name.Trim();
+
+        var departmentExists = await _context.Departments
+            .AnyAsync(department =>
+                department.Name.ToLower() == normalizedName.ToLower());
+
+        if (departmentExists)
+        {
+            return Conflict(
+                "A department with this name already exists.");
+        }
+
         var department = new Department
         {
-            Name = dto.Name
+            Name = normalizedName
         };
 
         _context.Departments.Add(department);
-
         await _context.SaveChangesAsync();
 
         return CreatedAtAction(
@@ -42,48 +75,52 @@ public class DepartmentsController : ControllerBase
             department);
     }
 
-    [HttpGet("{id}")]
-    public async Task<ActionResult<Department>> GetDepartment(int id)
+    // PUT: api/departments/1
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> UpdateDepartment(
+        int id,
+        UpdateDepartmentDto dto)
     {
         var department = await _context.Departments.FindAsync(id);
 
-        if (department == null)
+        if (department is null)
         {
             return NotFound();
         }
 
-        return department;
-    }
+        var normalizedName = dto.Name.Trim();
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateDepartment(int id, UpdateDepartmentDto dto)
-    {
-        var department = await _context.Departments.FindAsync(id);
+        var departmentExists = await _context.Departments
+            .AnyAsync(existingDepartment =>
+                existingDepartment.Id != id &&
+                existingDepartment.Name.ToLower() ==
+                normalizedName.ToLower());
 
-        if (department == null)
+        if (departmentExists)
         {
-            return NotFound();
+            return Conflict(
+                "A department with this name already exists.");
         }
 
-        department.Name = dto.Name;
+        department.Name = normalizedName;
 
         await _context.SaveChangesAsync();
 
         return NoContent();
     }
 
-    [HttpDelete("{id}")]
+    // DELETE: api/departments/1
+    [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteDepartment(int id)
     {
         var department = await _context.Departments.FindAsync(id);
 
-        if (department == null)
+        if (department is null)
         {
             return NotFound();
         }
 
         _context.Departments.Remove(department);
-
         await _context.SaveChangesAsync();
 
         return NoContent();

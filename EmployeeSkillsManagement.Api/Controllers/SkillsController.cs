@@ -17,32 +17,54 @@ public class SkillsController : ControllerBase
         _context = context;
     }
 
+    // GET: api/skills
     [HttpGet]
     public async Task<ActionResult<List<Skill>>> GetSkills()
     {
-        return await _context.Skills.ToListAsync();
+        var skills = await _context.Skills
+            .AsNoTracking()
+            .ToListAsync();
+
+        return Ok(skills);
     }
 
-    [HttpGet("{id}")]
+    // GET: api/skills/1
+    [HttpGet("{id:int}")]
     public async Task<ActionResult<Skill>> GetSkill(int id)
     {
-        var skill = await _context.Skills.FindAsync(id);
+        var skill = await _context.Skills
+            .AsNoTracking()
+            .FirstOrDefaultAsync(skill => skill.Id == id);
 
-        if (skill == null)
+        if (skill is null)
         {
             return NotFound();
         }
 
-        return skill;
+        return Ok(skill);
     }
 
+    // POST: api/skills
     [HttpPost]
     public async Task<ActionResult<Skill>> CreateSkill(CreateSkillDto dto)
     {
+        var normalizedName = dto.Name.Trim();
+        var normalizedCategory = dto.Category.Trim();
+
+        var skillExists = await _context.Skills
+            .AnyAsync(skill =>
+                skill.Name.ToLower() == normalizedName.ToLower());
+
+        if (skillExists)
+        {
+            return Conflict(
+                "A skill with this name already exists.");
+        }
+
         var skill = new Skill
         {
-            Name = dto.Name,
-            Category = dto.Category
+            Name = normalizedName,
+            Category = normalizedCategory
         };
 
         _context.Skills.Add(skill);
@@ -54,30 +76,49 @@ public class SkillsController : ControllerBase
             skill);
     }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateSkill(int id, UpdateSkillDto dto)
+    // PUT: api/skills/1
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> UpdateSkill(
+        int id,
+        UpdateSkillDto dto)
     {
         var skill = await _context.Skills.FindAsync(id);
 
-        if (skill == null)
+        if (skill is null)
         {
             return NotFound();
         }
 
-        skill.Name = dto.Name;
-        skill.Category = dto.Category;
+        var normalizedName = dto.Name.Trim();
+        var normalizedCategory = dto.Category.Trim();
+
+        var skillExists = await _context.Skills
+            .AnyAsync(existingSkill =>
+                existingSkill.Id != id &&
+                existingSkill.Name.ToLower() ==
+                normalizedName.ToLower());
+
+        if (skillExists)
+        {
+            return Conflict(
+                "A skill with this name already exists.");
+        }
+
+        skill.Name = normalizedName;
+        skill.Category = normalizedCategory;
 
         await _context.SaveChangesAsync();
 
         return NoContent();
     }
 
-    [HttpDelete("{id}")]
+    // DELETE: api/skills/1
+    [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteSkill(int id)
     {
         var skill = await _context.Skills.FindAsync(id);
 
-        if (skill == null)
+        if (skill is null)
         {
             return NotFound();
         }
