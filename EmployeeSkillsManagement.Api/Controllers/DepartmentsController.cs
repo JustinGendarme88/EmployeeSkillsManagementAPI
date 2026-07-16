@@ -18,11 +18,21 @@ public class DepartmentsController : ControllerBase
     }
 
     // GET: api/departments
+    // GET: api/departments?name=it
     [HttpGet]
-    public async Task<ActionResult<List<Department>>> GetDepartments()
+    public async Task<ActionResult<IEnumerable<Department>>> GetDepartments(
+        [FromQuery] string? name)
     {
-        var departments = await _context.Departments
-            .AsNoTracking()
+        var query = _context.Departments.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            query = query.Where(department =>
+                department.Name.ToLower().Contains(name.ToLower()));
+        }
+
+        var departments = await query
+            .OrderBy(department => department.Name)
             .ToListAsync();
 
         return Ok(departments);
