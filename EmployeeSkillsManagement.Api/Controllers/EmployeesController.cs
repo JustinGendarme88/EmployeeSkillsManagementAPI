@@ -18,12 +18,45 @@ public class EmployeesController : ControllerBase
     }
 
     // GET: api/employees
+    // GET: api/employees?name=john
+    // GET: api/employees?email=gmail
+    // GET: api/employees?departmentId=1
     [HttpGet]
-    public async Task<ActionResult<List<Employee>>> GetEmployees()
+    public async Task<ActionResult<IEnumerable<Employee>>> GetEmployees(
+        [FromQuery] string? name,
+        [FromQuery] string? email,
+        [FromQuery] int? departmentId)
     {
-        var employees = await _context.Employees
-            .AsNoTracking()
+        var query = _context.Employees
             .Include(employee => employee.Department)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            var normalizedName = name.ToLower();
+
+            query = query.Where(employee =>
+                employee.FirstName.ToLower().Contains(normalizedName) ||
+                employee.LastName.ToLower().Contains(normalizedName));
+        }
+
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var normalizedEmail = email.ToLower();
+
+            query = query.Where(employee =>
+                employee.Email.ToLower().Contains(normalizedEmail));
+        }
+
+        if (departmentId.HasValue)
+        {
+            query = query.Where(employee =>
+                employee.DepartmentId == departmentId.Value);
+        }
+
+        var employees = await query
+            .OrderBy(employee => employee.LastName)
+            .ThenBy(employee => employee.FirstName)
             .ToListAsync();
 
         return Ok(employees);
