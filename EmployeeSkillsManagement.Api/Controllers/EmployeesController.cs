@@ -21,19 +21,36 @@ public class EmployeesController : ControllerBase
     // GET: api/employees?name=john
     // GET: api/employees?email=gmail
     // GET: api/employees?departmentId=1
+    // GET: api/employees?page=1&pageSize=10
+    // GET: api/employees?departmentId=1&page=1&pageSize=5
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Employee>>> GetEmployees(
+    public async Task<ActionResult> GetEmployees(
         [FromQuery] string? name,
         [FromQuery] string? email,
-        [FromQuery] int? departmentId)
+        [FromQuery] int? departmentId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
+        if (page < 1)
+        {
+            return BadRequest(
+                "Page must be greater than or equal to 1.");
+        }
+
+        if (pageSize < 1 || pageSize > 100)
+        {
+            return BadRequest(
+                "Page size must be between 1 and 100.");
+        }
+
         var query = _context.Employees
+            .AsNoTracking()
             .Include(employee => employee.Department)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(name))
         {
-            var normalizedName = name.ToLower();
+            var normalizedName = name.Trim().ToLower();
 
             query = query.Where(employee =>
                 employee.FirstName.ToLower().Contains(normalizedName) ||
@@ -42,7 +59,7 @@ public class EmployeesController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(email))
         {
-            var normalizedEmail = email.ToLower();
+            var normalizedEmail = email.Trim().ToLower();
 
             query = query.Where(employee =>
                 employee.Email.ToLower().Contains(normalizedEmail));
@@ -54,12 +71,26 @@ public class EmployeesController : ControllerBase
                 employee.DepartmentId == departmentId.Value);
         }
 
+        var totalItems = await query.CountAsync();
+
         var employees = await query
             .OrderBy(employee => employee.LastName)
             .ThenBy(employee => employee.FirstName)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
-        return Ok(employees);
+        var totalPages = (int)Math.Ceiling(
+            totalItems / (double)pageSize);
+
+        return Ok(new
+        {
+            Page = page,
+            PageSize = pageSize,
+            TotalItems = totalItems,
+            TotalPages = totalPages,
+            Items = employees
+        });
     }
 
     // GET: api/employees/1
@@ -85,7 +116,8 @@ public class EmployeesController : ControllerBase
         CreateEmployeeDto dto)
     {
         var departmentExists = await _context.Departments
-            .AnyAsync(department => department.Id == dto.DepartmentId);
+            .AnyAsync(department =>
+                department.Id == dto.DepartmentId);
 
         if (!departmentExists)
         {
@@ -137,7 +169,8 @@ public class EmployeesController : ControllerBase
         }
 
         var departmentExists = await _context.Departments
-            .AnyAsync(department => department.Id == dto.DepartmentId);
+            .AnyAsync(department =>
+                department.Id == dto.DepartmentId);
 
         if (!departmentExists)
         {
