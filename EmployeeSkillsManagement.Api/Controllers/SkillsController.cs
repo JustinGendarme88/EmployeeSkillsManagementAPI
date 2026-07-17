@@ -18,11 +18,34 @@ public class SkillsController : ControllerBase
     }
 
     // GET: api/skills
+    // GET: api/skills?name=csharp
+    // GET: api/skills?category=programming
     [HttpGet]
-    public async Task<ActionResult<List<Skill>>> GetSkills()
+    public async Task<ActionResult<IEnumerable<Skill>>> GetSkills(
+        [FromQuery] string? name,
+        [FromQuery] string? category)
     {
-        var skills = await _context.Skills
-            .AsNoTracking()
+        var query = _context.Skills.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            var normalizedName = name.ToLower();
+
+            query = query.Where(skill =>
+                skill.Name.ToLower().Contains(normalizedName));
+        }
+
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            var normalizedCategory = category.ToLower();
+
+            query = query.Where(skill =>
+                skill.Category.ToLower().Contains(normalizedCategory));
+        }
+
+        var skills = await query
+            .OrderBy(skill => skill.Category)
+            .ThenBy(skill => skill.Name)
             .ToListAsync();
 
         return Ok(skills);
