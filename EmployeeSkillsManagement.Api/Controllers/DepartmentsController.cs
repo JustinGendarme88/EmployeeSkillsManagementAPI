@@ -19,23 +19,56 @@ public class DepartmentsController : ControllerBase
 
     // GET: api/departments
     // GET: api/departments?name=it
+    // GET: api/departments?page=1&pageSize=10
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Department>>> GetDepartments(
-        [FromQuery] string? name)
+    public async Task<ActionResult> GetDepartments(
+        [FromQuery] string? name,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var query = _context.Departments.AsQueryable();
+        if (page < 1)
+        {
+            return BadRequest(
+                "Page must be greater than or equal to 1.");
+        }
+
+        if (pageSize < 1 || pageSize > 100)
+        {
+            return BadRequest(
+                "Page size must be between 1 and 100.");
+        }
+
+        var query = _context.Departments
+            .AsNoTracking()
+            .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(name))
         {
+            var normalizedName = name.Trim().ToLower();
+
             query = query.Where(department =>
-                department.Name.ToLower().Contains(name.ToLower()));
+                department.Name.ToLower().Contains(normalizedName));
         }
+
+        var totalItems = await query.CountAsync();
 
         var departments = await query
             .OrderBy(department => department.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
-        return Ok(departments);
+        var totalPages = (int)Math.Ceiling(
+            totalItems / (double)pageSize);
+
+        return Ok(new
+        {
+            Page = page,
+            PageSize = pageSize,
+            TotalItems = totalItems,
+            TotalPages = totalPages,
+            Items = departments
+        });
     }
 
     // GET: api/departments/1
