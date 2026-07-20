@@ -20,16 +20,33 @@ public class SkillsController : ControllerBase
     // GET: api/skills
     // GET: api/skills?name=csharp
     // GET: api/skills?category=programming
+    // GET: api/skills?page=1&pageSize=10
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Skill>>> GetSkills(
+    public async Task<ActionResult> GetSkills(
         [FromQuery] string? name,
-        [FromQuery] string? category)
+        [FromQuery] string? category,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var query = _context.Skills.AsQueryable();
+        if (page < 1)
+        {
+            return BadRequest(
+                "Page must be greater than or equal to 1.");
+        }
+
+        if (pageSize < 1 || pageSize > 100)
+        {
+            return BadRequest(
+                "Page size must be between 1 and 100.");
+        }
+
+        var query = _context.Skills
+            .AsNoTracking()
+            .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(name))
         {
-            var normalizedName = name.ToLower();
+            var normalizedName = name.Trim().ToLower();
 
             query = query.Where(skill =>
                 skill.Name.ToLower().Contains(normalizedName));
@@ -37,18 +54,32 @@ public class SkillsController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(category))
         {
-            var normalizedCategory = category.ToLower();
+            var normalizedCategory = category.Trim().ToLower();
 
             query = query.Where(skill =>
                 skill.Category.ToLower().Contains(normalizedCategory));
         }
 
+        var totalItems = await query.CountAsync();
+
         var skills = await query
             .OrderBy(skill => skill.Category)
             .ThenBy(skill => skill.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
-        return Ok(skills);
+        var totalPages = (int)Math.Ceiling(
+            totalItems / (double)pageSize);
+
+        return Ok(new
+        {
+            Page = page,
+            PageSize = pageSize,
+            TotalItems = totalItems,
+            TotalPages = totalPages,
+            Items = skills
+        });
     }
 
     // GET: api/skills/1
