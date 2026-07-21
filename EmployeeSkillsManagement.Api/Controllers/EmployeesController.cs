@@ -83,14 +83,16 @@ public class EmployeesController : ControllerBase
         var totalPages = (int)Math.Ceiling(
             totalItems / (double)pageSize);
 
-        return Ok(new
+        var result = new PagedResult<Employee>
         {
             Page = page,
             PageSize = pageSize,
             TotalItems = totalItems,
             TotalPages = totalPages,
             Items = employees
-        });
+        };
+
+        return Ok(result);
     }
 
     // GET: api/employees/1

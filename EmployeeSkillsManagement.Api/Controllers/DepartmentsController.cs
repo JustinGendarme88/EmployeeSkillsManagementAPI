@@ -61,14 +61,16 @@ public class DepartmentsController : ControllerBase
         var totalPages = (int)Math.Ceiling(
             totalItems / (double)pageSize);
 
-        return Ok(new
+        var result = new PagedResult<Department>
         {
             Page = page,
             PageSize = pageSize,
             TotalItems = totalItems,
             TotalPages = totalPages,
             Items = departments
-        });
+        };
+
+        return Ok(result);
     }
 
     // GET: api/departments/1

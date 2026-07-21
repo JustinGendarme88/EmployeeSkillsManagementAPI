@@ -72,14 +72,16 @@ public class SkillsController : ControllerBase
         var totalPages = (int)Math.Ceiling(
             totalItems / (double)pageSize);
 
-        return Ok(new
+        var result = new PagedResult<Skill>
         {
             Page = page,
             PageSize = pageSize,
             TotalItems = totalItems,
             TotalPages = totalPages,
             Items = skills
-        });
+        };
+
+        return Ok(result);
     }
 
     // GET: api/skills/1
