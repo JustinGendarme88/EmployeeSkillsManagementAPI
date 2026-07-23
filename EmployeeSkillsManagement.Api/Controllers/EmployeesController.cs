@@ -1,9 +1,7 @@
-﻿using EmployeeSkillsManagement.Api.Data;
-using EmployeeSkillsManagement.Api.DTOs;
+﻿using EmployeeSkillsManagement.Api.DTOs;
 using EmployeeSkillsManagement.Api.Models;
 using EmployeeSkillsManagement.Api.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace EmployeeSkillsManagement.Api.Controllers;
 
@@ -11,14 +9,10 @@ namespace EmployeeSkillsManagement.Api.Controllers;
 [Route("api/[controller]")]
 public class EmployeesController : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
     private readonly IEmployeeService _employeeService;
 
-    public EmployeesController(
-        ApplicationDbContext context,
-        IEmployeeService employeeService)
+    public EmployeesController(IEmployeeService employeeService)
     {
-        _context = context;
         _employeeService = employeeService;
     }
 
@@ -27,7 +21,6 @@ public class EmployeesController : ControllerBase
     // GET: api/employees?email=gmail
     // GET: api/employees?departmentId=1
     // GET: api/employees?page=1&pageSize=10
-    // GET: api/employees?departmentId=1&page=1&pageSize=5
     [HttpGet]
     public async Task<ActionResult> GetEmployees(
         [FromQuery] string? name,
@@ -62,10 +55,8 @@ public class EmployeesController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<Employee>> GetEmployee(int id)
     {
-        var employee = await _context.Employees
-            .AsNoTracking()
-            .Include(employee => employee.Department)
-            .FirstOrDefaultAsync(employee => employee.Id == id);
+        var employee =
+            await _employeeService.GetEmployeeByIdAsync(id);
 
         if (employee is null)
         {
@@ -80,44 +71,26 @@ public class EmployeesController : ControllerBase
     public async Task<ActionResult<Employee>> CreateEmployee(
         CreateEmployeeDto dto)
     {
-        var departmentExists = await _context.Departments
-            .AnyAsync(department =>
-                department.Id == dto.DepartmentId);
+        var result =
+            await _employeeService.CreateEmployeeAsync(dto);
 
-        if (!departmentExists)
+        if (result.Status ==
+            EmployeeServiceStatus.DepartmentNotFound)
         {
             return BadRequest("Department does not exist.");
         }
 
-        var normalizedFirstName = dto.FirstName.Trim();
-        var normalizedLastName = dto.LastName.Trim();
-        var normalizedEmail = dto.Email.Trim().ToLower();
-
-        var emailExists = await _context.Employees
-            .AnyAsync(employee =>
-                employee.Email.ToLower() == normalizedEmail);
-
-        if (emailExists)
+        if (result.Status ==
+            EmployeeServiceStatus.EmailAlreadyExists)
         {
             return Conflict(
                 "An employee with this email already exists.");
         }
 
-        var employee = new Employee
-        {
-            FirstName = normalizedFirstName,
-            LastName = normalizedLastName,
-            Email = normalizedEmail,
-            DepartmentId = dto.DepartmentId
-        };
-
-        _context.Employees.Add(employee);
-        await _context.SaveChangesAsync();
-
         return CreatedAtAction(
             nameof(GetEmployee),
-            new { id = employee.Id },
-            employee);
+            new { id = result.Data!.Id },
+            result.Data);
     }
 
     // PUT: api/employees/1
@@ -126,43 +99,26 @@ public class EmployeesController : ControllerBase
         int id,
         UpdateEmployeeDto dto)
     {
-        var employee = await _context.Employees.FindAsync(id);
+        var result =
+            await _employeeService.UpdateEmployeeAsync(id, dto);
 
-        if (employee is null)
+        if (result.Status == EmployeeServiceStatus.NotFound)
         {
             return NotFound();
         }
 
-        var departmentExists = await _context.Departments
-            .AnyAsync(department =>
-                department.Id == dto.DepartmentId);
-
-        if (!departmentExists)
+        if (result.Status ==
+            EmployeeServiceStatus.DepartmentNotFound)
         {
             return BadRequest("Department does not exist.");
         }
 
-        var normalizedFirstName = dto.FirstName.Trim();
-        var normalizedLastName = dto.LastName.Trim();
-        var normalizedEmail = dto.Email.Trim().ToLower();
-
-        var emailExists = await _context.Employees
-            .AnyAsync(existingEmployee =>
-                existingEmployee.Id != id &&
-                existingEmployee.Email.ToLower() == normalizedEmail);
-
-        if (emailExists)
+        if (result.Status ==
+            EmployeeServiceStatus.EmailAlreadyExists)
         {
             return Conflict(
                 "An employee with this email already exists.");
         }
-
-        employee.FirstName = normalizedFirstName;
-        employee.LastName = normalizedLastName;
-        employee.Email = normalizedEmail;
-        employee.DepartmentId = dto.DepartmentId;
-
-        await _context.SaveChangesAsync();
 
         return NoContent();
     }
@@ -171,15 +127,13 @@ public class EmployeesController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteEmployee(int id)
     {
-        var employee = await _context.Employees.FindAsync(id);
+        var result =
+            await _employeeService.DeleteEmployeeAsync(id);
 
-        if (employee is null)
+        if (result.Status == EmployeeServiceStatus.NotFound)
         {
             return NotFound();
         }
-
-        _context.Employees.Remove(employee);
-        await _context.SaveChangesAsync();
 
         return NoContent();
     }

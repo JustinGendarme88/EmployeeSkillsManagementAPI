@@ -70,4 +70,148 @@ public class EmployeeService : IEmployeeService
             Items = employees
         };
     }
+
+    public async Task<Employee?> GetEmployeeByIdAsync(int id)
+    {
+        return await _context.Employees
+            .AsNoTracking()
+            .Include(employee => employee.Department)
+            .FirstOrDefaultAsync(employee => employee.Id == id);
+    }
+
+    public async Task<EmployeeServiceResult<Employee>> CreateEmployeeAsync(
+        CreateEmployeeDto dto)
+    {
+        var departmentExists = await _context.Departments
+            .AnyAsync(department =>
+                department.Id == dto.DepartmentId);
+
+        if (!departmentExists)
+        {
+            return new EmployeeServiceResult<Employee>
+            {
+                Status = EmployeeServiceStatus.DepartmentNotFound
+            };
+        }
+
+        var normalizedFirstName = dto.FirstName.Trim();
+        var normalizedLastName = dto.LastName.Trim();
+        var normalizedEmail = dto.Email.Trim().ToLower();
+
+        var emailExists = await _context.Employees
+            .AnyAsync(employee =>
+                employee.Email.ToLower() == normalizedEmail);
+
+        if (emailExists)
+        {
+            return new EmployeeServiceResult<Employee>
+            {
+                Status = EmployeeServiceStatus.EmailAlreadyExists
+            };
+        }
+
+        var employee = new Employee
+        {
+            FirstName = normalizedFirstName,
+            LastName = normalizedLastName,
+            Email = normalizedEmail,
+            DepartmentId = dto.DepartmentId
+        };
+
+        _context.Employees.Add(employee);
+        await _context.SaveChangesAsync();
+
+        var createdEmployee = await _context.Employees
+            .AsNoTracking()
+            .Include(existingEmployee =>
+                existingEmployee.Department)
+            .FirstAsync(existingEmployee =>
+                existingEmployee.Id == employee.Id);
+
+        return new EmployeeServiceResult<Employee>
+        {
+            Status = EmployeeServiceStatus.Success,
+            Data = createdEmployee
+        };
+    }
+
+    public async Task<EmployeeServiceResult<bool>> UpdateEmployeeAsync(
+        int id,
+        UpdateEmployeeDto dto)
+    {
+        var employee = await _context.Employees.FindAsync(id);
+
+        if (employee is null)
+        {
+            return new EmployeeServiceResult<bool>
+            {
+                Status = EmployeeServiceStatus.NotFound
+            };
+        }
+
+        var departmentExists = await _context.Departments
+            .AnyAsync(department =>
+                department.Id == dto.DepartmentId);
+
+        if (!departmentExists)
+        {
+            return new EmployeeServiceResult<bool>
+            {
+                Status = EmployeeServiceStatus.DepartmentNotFound
+            };
+        }
+
+        var normalizedFirstName = dto.FirstName.Trim();
+        var normalizedLastName = dto.LastName.Trim();
+        var normalizedEmail = dto.Email.Trim().ToLower();
+
+        var emailExists = await _context.Employees
+            .AnyAsync(existingEmployee =>
+                existingEmployee.Id != id &&
+                existingEmployee.Email.ToLower() == normalizedEmail);
+
+        if (emailExists)
+        {
+            return new EmployeeServiceResult<bool>
+            {
+                Status = EmployeeServiceStatus.EmailAlreadyExists
+            };
+        }
+
+        employee.FirstName = normalizedFirstName;
+        employee.LastName = normalizedLastName;
+        employee.Email = normalizedEmail;
+        employee.DepartmentId = dto.DepartmentId;
+
+        await _context.SaveChangesAsync();
+
+        return new EmployeeServiceResult<bool>
+        {
+            Status = EmployeeServiceStatus.Success,
+            Data = true
+        };
+    }
+
+    public async Task<EmployeeServiceResult<bool>> DeleteEmployeeAsync(
+        int id)
+    {
+        var employee = await _context.Employees.FindAsync(id);
+
+        if (employee is null)
+        {
+            return new EmployeeServiceResult<bool>
+            {
+                Status = EmployeeServiceStatus.NotFound
+            };
+        }
+
+        _context.Employees.Remove(employee);
+        await _context.SaveChangesAsync();
+
+        return new EmployeeServiceResult<bool>
+        {
+            Status = EmployeeServiceStatus.Success,
+            Data = true
+        };
+    }
 }

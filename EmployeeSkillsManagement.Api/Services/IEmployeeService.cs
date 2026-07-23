@@ -11,4 +11,15 @@ public interface IEmployeeService
         int? departmentId,
         int page,
         int pageSize);
+
+    Task<Employee?> GetEmployeeByIdAsync(int id);
+
+    Task<EmployeeServiceResult<Employee>> CreateEmployeeAsync(
+        CreateEmployeeDto dto);
+
+    Task<EmployeeServiceResult<bool>> UpdateEmployeeAsync(
+        int id,
+        UpdateEmployeeDto dto);
+
+    Task<EmployeeServiceResult<bool>> DeleteEmployeeAsync(int id);
 }
