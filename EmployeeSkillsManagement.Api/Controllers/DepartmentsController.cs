@@ -1,8 +1,7 @@
-﻿using EmployeeSkillsManagement.Api.Data;
-using EmployeeSkillsManagement.Api.DTOs;
+﻿using EmployeeSkillsManagement.Api.DTOs;
 using EmployeeSkillsManagement.Api.Models;
+using EmployeeSkillsManagement.Api.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace EmployeeSkillsManagement.Api.Controllers;
 
@@ -10,11 +9,12 @@ namespace EmployeeSkillsManagement.Api.Controllers;
 [Route("api/[controller]")]
 public class DepartmentsController : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IDepartmentService _departmentService;
 
-    public DepartmentsController(ApplicationDbContext context)
+    public DepartmentsController(
+        IDepartmentService departmentService)
     {
-        _context = context;
+        _departmentService = departmentService;
     }
 
     // GET: api/departments
@@ -38,48 +38,22 @@ public class DepartmentsController : ControllerBase
                 "Page size must be between 1 and 100.");
         }
 
-        var query = _context.Departments
-            .AsNoTracking()
-            .AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(name))
-        {
-            var normalizedName = name.Trim().ToLower();
-
-            query = query.Where(department =>
-                department.Name.ToLower().Contains(normalizedName));
-        }
-
-        var totalItems = await query.CountAsync();
-
-        var departments = await query
-            .OrderBy(department => department.Name)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
-
-        var totalPages = (int)Math.Ceiling(
-            totalItems / (double)pageSize);
-
-        var result = new PagedResult<Department>
-        {
-            Page = page,
-            PageSize = pageSize,
-            TotalItems = totalItems,
-            TotalPages = totalPages,
-            Items = departments
-        };
+        var result =
+            await _departmentService.GetDepartmentsAsync(
+                name,
+                page,
+                pageSize);
 
         return Ok(result);
     }
 
     // GET: api/departments/1
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<Department>> GetDepartment(int id)
+    public async Task<ActionResult<Department>> GetDepartment(
+        int id)
     {
-        var department = await _context.Departments
-            .AsNoTracking()
-            .FirstOrDefaultAsync(department => department.Id == id);
+        var department =
+            await _departmentService.GetDepartmentByIdAsync(id);
 
         if (department is null)
         {
@@ -94,30 +68,20 @@ public class DepartmentsController : ControllerBase
     public async Task<ActionResult<Department>> CreateDepartment(
         CreateDepartmentDto dto)
     {
-        var normalizedName = dto.Name.Trim();
+        var result =
+            await _departmentService.CreateDepartmentAsync(dto);
 
-        var departmentExists = await _context.Departments
-            .AnyAsync(department =>
-                department.Name.ToLower() == normalizedName.ToLower());
-
-        if (departmentExists)
+        if (result.Status ==
+            DepartmentServiceStatus.NameAlreadyExists)
         {
             return Conflict(
                 "A department with this name already exists.");
         }
 
-        var department = new Department
-        {
-            Name = normalizedName
-        };
-
-        _context.Departments.Add(department);
-        await _context.SaveChangesAsync();
-
         return CreatedAtAction(
             nameof(GetDepartment),
-            new { id = department.Id },
-            department);
+            new { id = result.Data!.Id },
+            result.Data);
     }
 
     // PUT: api/departments/1
@@ -126,30 +90,23 @@ public class DepartmentsController : ControllerBase
         int id,
         UpdateDepartmentDto dto)
     {
-        var department = await _context.Departments.FindAsync(id);
+        var result =
+            await _departmentService.UpdateDepartmentAsync(
+                id,
+                dto);
 
-        if (department is null)
+        if (result.Status ==
+            DepartmentServiceStatus.NotFound)
         {
             return NotFound();
         }
 
-        var normalizedName = dto.Name.Trim();
-
-        var departmentExists = await _context.Departments
-            .AnyAsync(existingDepartment =>
-                existingDepartment.Id != id &&
-                existingDepartment.Name.ToLower() ==
-                normalizedName.ToLower());
-
-        if (departmentExists)
+        if (result.Status ==
+            DepartmentServiceStatus.NameAlreadyExists)
         {
             return Conflict(
                 "A department with this name already exists.");
         }
-
-        department.Name = normalizedName;
-
-        await _context.SaveChangesAsync();
 
         return NoContent();
     }
@@ -158,15 +115,14 @@ public class DepartmentsController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteDepartment(int id)
     {
-        var department = await _context.Departments.FindAsync(id);
+        var result =
+            await _departmentService.DeleteDepartmentAsync(id);
 
-        if (department is null)
+        if (result.Status ==
+            DepartmentServiceStatus.NotFound)
         {
             return NotFound();
         }
-
-        _context.Departments.Remove(department);
-        await _context.SaveChangesAsync();
 
         return NoContent();
     }
