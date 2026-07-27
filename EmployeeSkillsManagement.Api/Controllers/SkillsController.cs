@@ -1,8 +1,7 @@
-﻿using EmployeeSkillsManagement.Api.Data;
-using EmployeeSkillsManagement.Api.DTOs;
+﻿using EmployeeSkillsManagement.Api.DTOs;
 using EmployeeSkillsManagement.Api.Models;
+using EmployeeSkillsManagement.Api.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace EmployeeSkillsManagement.Api.Controllers;
 
@@ -10,11 +9,11 @@ namespace EmployeeSkillsManagement.Api.Controllers;
 [Route("api/[controller]")]
 public class SkillsController : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
+    private readonly ISkillService _skillService;
 
-    public SkillsController(ApplicationDbContext context)
+    public SkillsController(ISkillService skillService)
     {
-        _context = context;
+        _skillService = skillService;
     }
 
     // GET: api/skills
@@ -40,46 +39,11 @@ public class SkillsController : ControllerBase
                 "Page size must be between 1 and 100.");
         }
 
-        var query = _context.Skills
-            .AsNoTracking()
-            .AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(name))
-        {
-            var normalizedName = name.Trim().ToLower();
-
-            query = query.Where(skill =>
-                skill.Name.ToLower().Contains(normalizedName));
-        }
-
-        if (!string.IsNullOrWhiteSpace(category))
-        {
-            var normalizedCategory = category.Trim().ToLower();
-
-            query = query.Where(skill =>
-                skill.Category.ToLower().Contains(normalizedCategory));
-        }
-
-        var totalItems = await query.CountAsync();
-
-        var skills = await query
-            .OrderBy(skill => skill.Category)
-            .ThenBy(skill => skill.Name)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
-
-        var totalPages = (int)Math.Ceiling(
-            totalItems / (double)pageSize);
-
-        var result = new PagedResult<Skill>
-        {
-            Page = page,
-            PageSize = pageSize,
-            TotalItems = totalItems,
-            TotalPages = totalPages,
-            Items = skills
-        };
+        var result = await _skillService.GetSkillsAsync(
+            name,
+            category,
+            page,
+            pageSize);
 
         return Ok(result);
     }
@@ -88,9 +52,7 @@ public class SkillsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<Skill>> GetSkill(int id)
     {
-        var skill = await _context.Skills
-            .AsNoTracking()
-            .FirstOrDefaultAsync(skill => skill.Id == id);
+        var skill = await _skillService.GetSkillByIdAsync(id);
 
         if (skill is null)
         {
@@ -102,34 +64,22 @@ public class SkillsController : ControllerBase
 
     // POST: api/skills
     [HttpPost]
-    public async Task<ActionResult<Skill>> CreateSkill(CreateSkillDto dto)
+    public async Task<ActionResult<Skill>> CreateSkill(
+        CreateSkillDto dto)
     {
-        var normalizedName = dto.Name.Trim();
-        var normalizedCategory = dto.Category.Trim();
+        var result = await _skillService.CreateSkillAsync(dto);
 
-        var skillExists = await _context.Skills
-            .AnyAsync(skill =>
-                skill.Name.ToLower() == normalizedName.ToLower());
-
-        if (skillExists)
+        if (result.Status ==
+            SkillServiceStatus.NameAlreadyExists)
         {
             return Conflict(
                 "A skill with this name already exists.");
         }
 
-        var skill = new Skill
-        {
-            Name = normalizedName,
-            Category = normalizedCategory
-        };
-
-        _context.Skills.Add(skill);
-        await _context.SaveChangesAsync();
-
         return CreatedAtAction(
             nameof(GetSkill),
-            new { id = skill.Id },
-            skill);
+            new { id = result.Data!.Id },
+            result.Data);
     }
 
     // PUT: api/skills/1
@@ -138,32 +88,21 @@ public class SkillsController : ControllerBase
         int id,
         UpdateSkillDto dto)
     {
-        var skill = await _context.Skills.FindAsync(id);
+        var result = await _skillService.UpdateSkillAsync(
+            id,
+            dto);
 
-        if (skill is null)
+        if (result.Status == SkillServiceStatus.NotFound)
         {
             return NotFound();
         }
 
-        var normalizedName = dto.Name.Trim();
-        var normalizedCategory = dto.Category.Trim();
-
-        var skillExists = await _context.Skills
-            .AnyAsync(existingSkill =>
-                existingSkill.Id != id &&
-                existingSkill.Name.ToLower() ==
-                normalizedName.ToLower());
-
-        if (skillExists)
+        if (result.Status ==
+            SkillServiceStatus.NameAlreadyExists)
         {
             return Conflict(
                 "A skill with this name already exists.");
         }
-
-        skill.Name = normalizedName;
-        skill.Category = normalizedCategory;
-
-        await _context.SaveChangesAsync();
 
         return NoContent();
     }
@@ -172,15 +111,12 @@ public class SkillsController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteSkill(int id)
     {
-        var skill = await _context.Skills.FindAsync(id);
+        var result = await _skillService.DeleteSkillAsync(id);
 
-        if (skill is null)
+        if (result.Status == SkillServiceStatus.NotFound)
         {
             return NotFound();
         }
-
-        _context.Skills.Remove(skill);
-        await _context.SaveChangesAsync();
 
         return NoContent();
     }
