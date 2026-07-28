@@ -25,6 +25,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
 builder.Services.AddScoped<ISkillService, SkillService>();
+builder.Services.AddScoped<IEmployeeSkillService, EmployeeSkillService>();
 
 var app = builder.Build();
 

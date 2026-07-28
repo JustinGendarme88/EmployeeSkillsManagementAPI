@@ -1,8 +1,6 @@
-﻿using EmployeeSkillsManagement.Api.Data;
-using EmployeeSkillsManagement.Api.DTOs;
-using EmployeeSkillsManagement.Api.Models;
+﻿using EmployeeSkillsManagement.Api.DTOs;
+using EmployeeSkillsManagement.Api.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace EmployeeSkillsManagement.Api.Controllers;
 
@@ -10,186 +8,132 @@ namespace EmployeeSkillsManagement.Api.Controllers;
 [Route("api/[controller]")]
 public class EmployeeSkillsController : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IEmployeeSkillService
+        _employeeSkillService;
 
-    public EmployeeSkillsController(ApplicationDbContext context)
+    public EmployeeSkillsController(
+        IEmployeeSkillService employeeSkillService)
     {
-        _context = context;
+        _employeeSkillService = employeeSkillService;
     }
 
     // GET: api/employeeskills
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<EmployeeSkillDto>>> GetEmployeeSkills()
+    public async Task<
+        ActionResult<IEnumerable<EmployeeSkillDto>>>
+        GetEmployeeSkills()
     {
-        var employeeSkills = await _context.EmployeeSkills
-            .Include(employeeSkill => employeeSkill.Employee)
-            .Include(employeeSkill => employeeSkill.Skill)
-            .Select(employeeSkill => new EmployeeSkillDto
-            {
-                EmployeeId = employeeSkill.EmployeeId,
-                EmployeeName =
-                    employeeSkill.Employee!.FirstName + " " +
-                    employeeSkill.Employee.LastName,
-                SkillId = employeeSkill.SkillId,
-                SkillName = employeeSkill.Skill!.Name,
-                ProficiencyLevel = employeeSkill.ProficiencyLevel
-            })
-            .ToListAsync();
+        var employeeSkills =
+            await _employeeSkillService
+                .GetEmployeeSkillsAsync();
 
         return Ok(employeeSkills);
     }
 
     // GET: api/employeeskills/1/2
     [HttpGet("{employeeId:int}/{skillId:int}")]
-    public async Task<ActionResult<EmployeeSkillDto>> GetEmployeeSkill(
-        int employeeId,
-        int skillId)
+    public async Task<ActionResult<EmployeeSkillDto>>
+        GetEmployeeSkill(
+            int employeeId,
+            int skillId)
     {
-        var employeeSkill = await _context.EmployeeSkills
-            .Include(es => es.Employee)
-            .Include(es => es.Skill)
-            .FirstOrDefaultAsync(es =>
-                es.EmployeeId == employeeId &&
-                es.SkillId == skillId);
+        var employeeSkill =
+            await _employeeSkillService
+                .GetEmployeeSkillAsync(
+                    employeeId,
+                    skillId);
 
         if (employeeSkill is null)
         {
             return NotFound();
         }
 
-        var employeeSkillDto = new EmployeeSkillDto
-        {
-            EmployeeId = employeeSkill.EmployeeId,
-            EmployeeName =
-                employeeSkill.Employee!.FirstName + " " +
-                employeeSkill.Employee.LastName,
-            SkillId = employeeSkill.SkillId,
-            SkillName = employeeSkill.Skill!.Name,
-            ProficiencyLevel = employeeSkill.ProficiencyLevel
-        };
-
-        return Ok(employeeSkillDto);
+        return Ok(employeeSkill);
     }
 
     // POST: api/employeeskills
     [HttpPost]
-    public async Task<ActionResult<EmployeeSkillDto>> CreateEmployeeSkill(
-        CreateEmployeeSkillDto createEmployeeSkillDto)
+    public async Task<ActionResult<EmployeeSkillDto>>
+        CreateEmployeeSkill(
+            CreateEmployeeSkillDto dto)
     {
-        var employeeExists = await _context.Employees
-            .AnyAsync(employee =>
-                employee.Id == createEmployeeSkillDto.EmployeeId);
+        var result =
+            await _employeeSkillService
+                .CreateEmployeeSkillAsync(dto);
 
-        if (!employeeExists)
+        if (result.Status ==
+            EmployeeSkillServiceStatus.EmployeeNotFound)
         {
-            return BadRequest("The specified employee does not exist.");
+            return BadRequest(
+                "The specified employee does not exist.");
         }
 
-        var skillExists = await _context.Skills
-            .AnyAsync(skill =>
-                skill.Id == createEmployeeSkillDto.SkillId);
-
-        if (!skillExists)
+        if (result.Status ==
+            EmployeeSkillServiceStatus.SkillNotFound)
         {
-            return BadRequest("The specified skill does not exist.");
+            return BadRequest(
+                "The specified skill does not exist.");
         }
 
-        var employeeSkillExists = await _context.EmployeeSkills
-            .AnyAsync(employeeSkill =>
-                employeeSkill.EmployeeId ==
-                createEmployeeSkillDto.EmployeeId &&
-                employeeSkill.SkillId ==
-                createEmployeeSkillDto.SkillId);
-
-        if (employeeSkillExists)
+        if (result.Status ==
+            EmployeeSkillServiceStatus.AlreadyExists)
         {
             return Conflict(
                 "This skill is already assigned to this employee.");
         }
 
-        var employeeSkill = new EmployeeSkill
-        {
-            EmployeeId = createEmployeeSkillDto.EmployeeId,
-            SkillId = createEmployeeSkillDto.SkillId,
-            ProficiencyLevel =
-                createEmployeeSkillDto.ProficiencyLevel
-        };
-
-        _context.EmployeeSkills.Add(employeeSkill);
-        await _context.SaveChangesAsync();
-
-        var createdEmployeeSkill = await _context.EmployeeSkills
-            .Include(es => es.Employee)
-            .Include(es => es.Skill)
-            .FirstAsync(es =>
-                es.EmployeeId == employeeSkill.EmployeeId &&
-                es.SkillId == employeeSkill.SkillId);
-
-        var employeeSkillDto = new EmployeeSkillDto
-        {
-            EmployeeId = createdEmployeeSkill.EmployeeId,
-            EmployeeName =
-                createdEmployeeSkill.Employee!.FirstName + " " +
-                createdEmployeeSkill.Employee.LastName,
-            SkillId = createdEmployeeSkill.SkillId,
-            SkillName = createdEmployeeSkill.Skill!.Name,
-            ProficiencyLevel =
-                createdEmployeeSkill.ProficiencyLevel
-        };
-
         return CreatedAtAction(
             nameof(GetEmployeeSkill),
             new
             {
-                employeeId = employeeSkill.EmployeeId,
-                skillId = employeeSkill.SkillId
+                employeeId = result.Data!.EmployeeId,
+                skillId = result.Data.SkillId
             },
-            employeeSkillDto);
+            result.Data);
     }
 
     // PUT: api/employeeskills/1/2
     [HttpPut("{employeeId:int}/{skillId:int}")]
-    public async Task<IActionResult> UpdateEmployeeSkill(
-        int employeeId,
-        int skillId,
-        UpdateEmployeeSkillDto updateEmployeeSkillDto)
+    public async Task<IActionResult>
+        UpdateEmployeeSkill(
+            int employeeId,
+            int skillId,
+            UpdateEmployeeSkillDto dto)
     {
-        var employeeSkill = await _context.EmployeeSkills
-            .FirstOrDefaultAsync(es =>
-                es.EmployeeId == employeeId &&
-                es.SkillId == skillId);
+        var result =
+            await _employeeSkillService
+                .UpdateEmployeeSkillAsync(
+                    employeeId,
+                    skillId,
+                    dto);
 
-        if (employeeSkill is null)
+        if (result.Status ==
+            EmployeeSkillServiceStatus.NotFound)
         {
             return NotFound();
         }
-
-        employeeSkill.ProficiencyLevel =
-            updateEmployeeSkillDto.ProficiencyLevel;
-
-        await _context.SaveChangesAsync();
 
         return NoContent();
     }
 
     // DELETE: api/employeeskills/1/2
     [HttpDelete("{employeeId:int}/{skillId:int}")]
-    public async Task<IActionResult> DeleteEmployeeSkill(
-        int employeeId,
-        int skillId)
+    public async Task<IActionResult>
+        DeleteEmployeeSkill(
+            int employeeId,
+            int skillId)
     {
-        var employeeSkill = await _context.EmployeeSkills
-            .FirstOrDefaultAsync(es =>
-                es.EmployeeId == employeeId &&
-                es.SkillId == skillId);
+        var result =
+            await _employeeSkillService
+                .DeleteEmployeeSkillAsync(
+                    employeeId,
+                    skillId);
 
-        if (employeeSkill is null)
+        if (result.Status ==
+            EmployeeSkillServiceStatus.NotFound)
         {
             return NotFound();
         }
-
-        _context.EmployeeSkills.Remove(employeeSkill);
-        await _context.SaveChangesAsync();
 
         return NoContent();
     }
